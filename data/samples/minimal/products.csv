@@ -1,0 +1,4 @@
+sku,name,category_id,base_unit,active_from
+00123,Cable demo,CABLE,m,2024-01-01
+SW-002,Switch demo,DEVICES,pcs,2024-01-01
+BR-003,Breaker demo,DEVICES,pcs,2024-01-01

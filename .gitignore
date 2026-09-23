@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .venv/
+.venv-win/
 venv/
 
 # Python
@@ -29,6 +30,7 @@ coverage/
 !/data/exports/.gitkeep
 /data/cache/*
 !/data/cache/.gitkeep
+/data/local/
 
 # Local tools
 .idea/
