@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hackalem-procurement"
 version = "0.1.0"
-description = "Explainable procurement: CSV input contract and backend skeleton"
+description = "Explainable procurement: demand preparation, forecasting and supplier orders"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2.10,<3", "uvicorn>=0.30,<1"]
 
@@ -17,3 +17,4 @@ include = ["backend*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

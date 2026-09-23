@@ -8,6 +8,9 @@
 - `app/modules/imports/validation.py` — связи и бизнес-ограничения.
 - `app/modules/imports/schemas.py` — диагностика и результат импорта.
 - `backend/validate_data.py` — CLI.
+- `app/engine/preprocessing/` — подготовка продаж, дневные модели и отчёт (этап 3).
+- `app/engine/outliers.py`, `stockouts.py` — причинные клиентские признаки и восстановление исторического спроса.
+- `backend/preprocess_sales.py` — CLI подготовки, отдельные экспорты без изменения входных CSV.
 
 Остальные файлы ниже — заготовки будущих этапов; БД, jobs, frontend и расчёты не подключены.
 

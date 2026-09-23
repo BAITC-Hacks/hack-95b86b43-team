@@ -1,9 +1,20 @@
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from backend.app.engine.contracts import DatasetContext
+
+
+def pytest_configure(config):
+    # Avoid Windows TEMP directories owned by a different sandbox/user.
+    # A fresh run directory also keeps concurrent runs isolated.
+    if config.option.basetemp is None:
+        root = Path(__file__).resolve().parents[1] / ".test-runs"
+        root.mkdir(exist_ok=True)
+        run = Path(tempfile.mkdtemp(prefix="run-", dir=root))
+        config.option.basetemp = str(run / "tmp")
 
 
 @pytest.fixture
