@@ -23,12 +23,12 @@ coverage/
 
 # Runtime files
 *.log
-/data/uploads/*
-!/data/uploads/.gitkeep
-/data/exports/*
-!/data/exports/.gitkeep
-/data/cache/*
-!/data/cache/.gitkeep
+# /data/uploads/*
+# !/data/uploads/.gitkeep
+# /data/exports/*
+# !/data/exports/.gitkeep
+# /data/cache/*
+# !/data/cache/.gitkeep
 
 # Local tools
 .idea/
