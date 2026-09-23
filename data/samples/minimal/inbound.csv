@@ -1,0 +1,2 @@
+po_line_id,sku,warehouse_id,supplier_id,qty_ordered,qty_received,eta,status
+PO-001,00123,WH-1,SUP-1,100.50,40.25,2026-09-07,in_transit

@@ -1,0 +1,4 @@
+snapshot_date,sku,warehouse_id,on_hand,reserved,blocked
+2026-09-01,00123,WH-1,200.50,10.25,0
+2026-09-01,SW-002,WH-1,30,0,0
+2026-09-01,BR-003,WH-1,0,0,0

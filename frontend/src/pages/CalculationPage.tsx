@@ -1,0 +1,20 @@
+import type { Bootstrap, CalculationSettings, Run } from '../shared/types';
+import { Icon, Toggle } from '../shared/ui';
+
+export default function CalculationPage({ settings, onChange, bootstrap, busy, run, onRun, settingsOpen, onSettingsToggle, onScenario }: {
+  settings: CalculationSettings; onChange: (s: CalculationSettings) => void; bootstrap: Bootstrap;
+  busy: boolean; run: Run | null; onRun: () => void; settingsOpen: boolean; onSettingsToggle: () => void; onScenario: () => void;
+}) {
+  const change = (key: keyof CalculationSettings, value: string | number | boolean | null) => onChange({ ...settings, [key]: value });
+  const progress = Math.max(4, Math.min(96, (run?.progress || 0) <= 1 ? (run?.progress || 0) * 100 : run?.progress || 0));
+  return <section className="calculation-section">
+    <div className="calculation-bar">
+      <div className="filter-field"><label htmlFor="warehouse">Склад</label><div className="select-wrap"><Icon name="warehouse" size={17}/><select id="warehouse" value={settings.warehouse_id || ''} onChange={e => change('warehouse_id', e.target.value || null)} disabled={busy}><option value="">Все склады</option>{bootstrap.warehouses.map(w => <option key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name}</option>)}</select></div></div>
+      <div className="filter-field category-field"><label htmlFor="category">Категория товаров</label><div className="select-wrap"><Icon name="box" size={17}/><select id="category" value={settings.category_id || ''} onChange={e => change('category_id', e.target.value || null)} disabled={busy}><option value="">Все категории</option>{bootstrap.categories.map(c => <option key={c.category_id} value={c.category_id}>{c.category_name}</option>)}</select></div></div>
+      <button className={`button secondary settings-button ${settingsOpen ? 'selected' : ''}`} onClick={onSettingsToggle} aria-expanded={settingsOpen}><Icon name="settings" size={18}/><span>Параметры</span></button>
+      <button className="button primary calculate-button" onClick={onRun} disabled={busy}>{busy ? <span className="spinner small"/> : <Icon name="bolt" size={18}/>}<span>{busy ? 'Рассчитываем…' : 'Рассчитать закупки'}</span></button>
+    </div>
+    {settingsOpen && <div className="calculation-settings"><div className="settings-intro"><div className="section-kicker">ПРОЗРАЧНЫЙ РАСЧЁТ</div><h3>Каждый фактор под контролем</h3><p>Измените поправки и сравните результат с предыдущим расчётом.</p><div className="day-settings"><label>Пересмотр, дней<input aria-label="Интервал пересмотра, дней" type="number" min="1" max="90" value={settings.review_days} onChange={e => change('review_days', Number(e.target.value))} disabled={busy}/></label><label>Резерв, дней<input aria-label="Страховой запас, дней" type="number" min="0" max="60" value={settings.safety_days} onChange={e => change('safety_days', Number(e.target.value))} disabled={busy}/></label></div></div><div className="settings-toggles"><Toggle label="Восстанавливать спрос при отсутствии" hint="Нулевые продажи не всегда означают нулевой спрос" checked={settings.use_stockout} onChange={v => change('use_stockout', v)} disabled={busy}/><Toggle label="Исключать разовые крупные заказы" hint="Сохранять регулярные закупки крупных клиентов" checked={settings.use_outliers} onChange={v => change('use_outliers', v)} disabled={busy}/><Toggle label="Учитывать сезонность" checked={settings.use_seasonality} onChange={v => change('use_seasonality', v)} disabled={busy}/><Toggle label="Учитывать устойчивый тренд" checked={settings.use_trend} onChange={v => change('use_trend', v)} disabled={busy}/><button className="button secondary" onClick={onScenario} disabled={busy || !run?.result}><Icon name="spark" size={17}/>Сравнить сценарий</button></div></div>}
+    {busy && <div className="progress-status" role="status"><div><span className="spinner small"/><span>{run?.message || 'Анализируем продажи, доступность и поставки'}</span><small>Расчёт на сервере</small></div><div className="progress-track"><span style={{ width: `${progress}%` }}/></div></div>}
+  </section>;
+}

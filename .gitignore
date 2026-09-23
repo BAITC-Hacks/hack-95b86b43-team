@@ -1,0 +1,42 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+.venv/
+.venv-win/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-runs/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime files
+*.log
+/data/uploads/*
+!/data/uploads/.gitkeep
+/data/exports/*
+!/data/exports/.gitkeep
+/data/cache/*
+!/data/cache/.gitkeep
+/data/local/
+/data/synthetic/
+/data/preprocessed/
+/data/runtime/
+
+# Local tools
+.idea/
+.DS_Store
+Thumbs.db

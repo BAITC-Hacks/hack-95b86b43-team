@@ -1,0 +1,4 @@
+sku,supplier_id,is_primary,lead_time_days
+00123,SUP-1,true,14
+SW-002,SUP-2,true,7
+BR-003,SUP-2,true,10
