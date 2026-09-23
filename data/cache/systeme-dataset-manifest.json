@@ -1,0 +1,12 @@
+{
+  "name": "Systeme Electric — первый сценарий из PostgreSQL",
+  "mode": "scenario",
+  "allow_partial": false,
+  "acknowledge_warnings": true,
+  "sources": {
+    "systeme:sales": {"import_id": "6c3c3ced-5584-496b-ac28-c18ff91907b4", "kind": "summary"},
+    "systeme:inventory": {"import_id": "6c3c3ced-5584-496b-ac28-c18ff91907b4", "kind": "summary"},
+    "systeme:inbound": {"import_id": "6c3c3ced-5584-496b-ac28-c18ff91907b4", "kind": "summary"},
+    "systeme:constraints": {"import_id": "5da98ddc-a9cf-43dd-8f00-7acb360d525e", "kind": "constraints"}
+  }
+}
