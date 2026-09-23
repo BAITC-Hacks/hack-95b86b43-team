@@ -77,6 +77,27 @@ class PostgresImportTests(unittest.TestCase):
         with self.engine.connect() as connection:
             self.assertEqual(compare_metadata(MigrationContext.configure(connection), metadata), [])
 
+    def test_iek_database_preview_matches_excel_without_reopening(self):
+        import json
+        from app.modules.calculations.iek_preview import file_sources, preview_iek
+        from app.modules.imports.datasets import iek_preview_sources
+        root = BACKEND.parent
+        if not (root / "IEK").is_dir():
+            self.skipTest("Real IEK sources unavailable")
+        sources = file_sources(root)
+        manifest = {"name": "IEK test", "mode": "scenario", "allow_partial": True,
+                    "acknowledge_warnings": True, "sources": {}}
+        for role, rows in sources.items():
+            batch = import_file(self.engine, root / "IEK" / rows[0].file, "iek", self.storage)
+            manifest["sources"]["iek:" + role] = {"import_id": batch["id"], "kind": rows[0].kind}
+        dataset = create_dataset(self.engine, manifest)
+        policy = json.loads((root / "tests/fixtures/synthetic/iek_preview_policy.json").read_text(encoding="utf-8"))
+        expected = preview_iek(root, policy, self.folder / "file.json", sources)
+        stored, _ = iek_preview_sources(self.engine, dataset["id"])
+        with patch("app.modules.calculations.iek_preview.read", side_effect=AssertionError("Excel reopened")):
+            actual = preview_iek(root, policy, self.folder / "db.json", stored, dataset["id"])
+        self.assertEqual(actual["recommendations"], expected["recommendations"])
+
     def test_same_bytes_renamed_reuse_and_context_creates_version(self):
         first = self.ingest()
         self.path = self.path.rename(self.folder / "renamed.xlsx")

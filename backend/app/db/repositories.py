@@ -124,3 +124,11 @@ class DatasetRepository:
             if value["occurred_at"] is not None:
                 row["fields"]["дата"] = value["occurred_at"]
         return rows
+
+    def rejected_rows(self, dataset_id, role):
+        """Diagnostic-only rows: callers must block them, never calculate from raw fields."""
+        statement = select(source_rows).join(dataset_sources,
+            (dataset_sources.c.import_id == source_rows.c.import_id) & (dataset_sources.c.kind == source_rows.c.kind))
+        return [dict(r) for r in self.connection.execute(statement.where(
+            dataset_sources.c.dataset_id == dataset_id, dataset_sources.c.role == role,
+            source_rows.c.accepted.is_(False)).order_by(source_rows.c.sheet, source_rows.c.row_number)).mappings()]

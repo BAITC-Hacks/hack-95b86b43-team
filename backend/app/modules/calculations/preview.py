@@ -140,7 +140,7 @@ def write_preview_html(result: dict, path: Path) -> None:
             previous_supplier = item.get("supplier")
             rows.append(f'<tr><th colspan="8">Поставщик: {text(previous_supplier)}</th></tr>')
         status = "Рассчитано в сценарии" if item["status"] == "calculated" else "Недостаточно данных"
-        details = {k: item.get(k) for k in ("source", "constraint_source", "explanation_steps", "forecast_diagnostics", "demand_adjustments", "limitations")}
+        details = {k: item.get(k) for k in ("source", "sources", "constraint_source", "storage_unit", "order_unit", "unit_rule", "stock_input", "inbound_inputs", "explanation_steps", "forecast_diagnostics", "demand_adjustments", "limitations")}
         rows.append("<tr>" + "".join(f"<td>{text(item.get(k))}</td>" for k in
             ("code", "article", "forecast_demand", "eligible_inbound", "raw_requirement", "order_quantity", "first_deficit_date"))
             + f"<td>{status}<details><summary>Обоснование</summary><pre>{escape(dumps(details))}</pre></details></td></tr>")
@@ -157,10 +157,15 @@ td:nth-child(n+3):nth-child(-n+6){text-align:right;font-variant-numeric:tabular-
     notice = ("Синтетические данные: все продажи, клиенты и условия сгенерированы для проверки алгоритмов."
               if result["mode"] == "synthetic" else
               "Сценарий на реальных исходниках: условия закупки и охват не подтверждены. Документная очистка и stockout не применены из-за ограничений данных.")
+    if result["policy"].get("stock_mode") == "historical_opening_proxy":
+        notice += " Начальный остаток месяца используется условно: это НЕ актуальный свободный остаток на дату расчёта."
     html += '<p class="notice">' + notice + ' Это диагностическая таблица, не утверждённый заказ.</p>'
     html += f'<p>Алгоритм: {text(result["algorithm_version"])}</p>'
     html += "<details><summary>Все допущения сценария</summary><pre>" + escape(
         json.dumps(result["policy"], ensure_ascii=False, indent=2)) + "</pre></details>"
+    if "unmatched_codes" in result:
+        html += "<details><summary>Коды источников без месячной истории продаж</summary><pre>" + escape(
+            dumps(result["unmatched_codes"])) + "</pre></details>"
     html += f'<p>Дата расчёта: {text(result["policy"]["calculation_date"])}. Строк: {len(result["recommendations"])}. Количество заказа — в единицах, заданных в сценарии.</p>'
     html += '<div class="table"><table><thead><tr>' + "".join(f"<th>{h}</th>" for h in
         ("Код 1С", "Артикул", "Прогноз на горизонт", "Учтённый путь", "Потребность до округления", "Количество заказа", "Первый дефицит", "Статус"))

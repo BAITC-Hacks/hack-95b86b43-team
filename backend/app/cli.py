@@ -19,6 +19,11 @@ def main():
     calculation.add_argument("--policy", type=Path, required=True)
     calculation.add_argument("--output", type=Path)
     calculation.add_argument("--dataset", help="Read a frozen PostgreSQL dataset instead of Excel")
+    iek = sub.add_parser("preview-iek", help="IEK scenario with explicit stock and unit assumptions")
+    iek.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
+    iek.add_argument("--policy", type=Path, required=True)
+    iek.add_argument("--output", type=Path)
+    iek.add_argument("--dataset", help="Read an explicit frozen IEK dataset instead of Excel")
     demo = sub.add_parser("engine-demo", help="Reproducible synthetic demand scenarios, without a database")
     demo.add_argument("--seed", type=int, default=42)
     demo.add_argument("--output", type=Path)
@@ -52,6 +57,20 @@ def main():
         from .modules.calculations.synthetic import run_demo
         result = run_demo(args.output or root / "data/cache/engine-demo.json", args.seed)
         print(f'Synthetic scenarios: {len(result["recommendations"])}; JSON, HTML and diagnostic CSV written')
+    elif args.command == "preview-iek":
+        from .modules.calculations.iek_preview import preview_iek
+        policy = json.loads(args.policy.read_text(encoding="utf-8"))
+        persisted = None
+        if args.dataset:
+            from .db.session import get_engine
+            from .modules.imports.datasets import iek_preview_sources
+            engine = get_engine()
+            try:
+                persisted, dataset = iek_preview_sources(engine, args.dataset)
+            finally:
+                engine.dispose()
+        result = preview_iek(root, policy, args.output or root / "data/cache/iek-preview.json", persisted, args.dataset)
+        print(dict(Counter(r["status"] for r in result["recommendations"])))
     elif args.command == "preview-systeme":
         policy = json.loads(args.policy.read_text(encoding="utf-8"))
         persisted = None

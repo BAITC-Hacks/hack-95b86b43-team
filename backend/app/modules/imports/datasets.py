@@ -88,3 +88,33 @@ def systeme_preview_sources(engine, dataset_id):
                 row["row_number"], row["kind"], row["product_code"], row["fields"])
                 for row in repository.hydrated_rows(dataset_id, role)]
         return result, dataset
+
+
+def iek_preview_sources(engine, dataset_id):
+    from .adapters.common import SourceRow
+    kinds = {"sales": "sales_monthly", "inventory": "inventory_monthly",
+             "inbound": "inbound", "constraints": "constraints"}
+    with engine.connect() as connection:
+        repository = DatasetRepository(connection)
+        dataset = repository.get(dataset_id)
+        if dataset["mode"] != "scenario":
+            raise ValueError("IEK preview requires a scenario dataset")
+        sources = dataset["manifest"]["sources"]
+        result = {}
+        scopes = {v["context"]["scope"] for k, v in sources.items()
+                  if k.startswith("iek:") and v["context"].get("scope_confirmed")}
+        if len(scopes) > 1:
+            raise ValueError("IEK source scopes conflict")
+        for role, kind in kinds.items():
+            key = "iek:" + role
+            if key not in sources or sources[key]["kind"] != kind:
+                raise ValueError(f"IEK preview requires explicit {key}:{kind}")
+            if sources[key]["context"].get("synthetic"):
+                raise ValueError("Synthetic sources cannot be labelled as real IEK inputs")
+            batch = ImportRepository(connection).get(sources[key]["import_id"])
+            rows = repository.hydrated_rows(dataset_id, key) + repository.rejected_rows(dataset_id, key)
+            rows.sort(key=lambda r: (r["sheet"], r["row_number"]))
+            result[role] = [SourceRow(batch["original_name"], batch["sha256"], "iek", row["sheet"],
+                row["row_number"], row["kind"], row["product_code"], row["fields"],
+                () if row["accepted"] else ("Rejected source row",)) for row in rows]
+        return result, dataset
