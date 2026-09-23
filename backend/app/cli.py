@@ -19,6 +19,9 @@ def main():
     calculation.add_argument("--policy", type=Path, required=True)
     calculation.add_argument("--output", type=Path)
     calculation.add_argument("--dataset", help="Read a frozen PostgreSQL dataset instead of Excel")
+    demo = sub.add_parser("engine-demo", help="Reproducible synthetic demand scenarios, without a database")
+    demo.add_argument("--seed", type=int, default=42)
+    demo.add_argument("--output", type=Path)
     sub.add_parser("db-upgrade", help="Apply Alembic migrations to DATABASE_URL")
     ingest = sub.add_parser("import-file", help="Persist one workbook without activating it")
     ingest.add_argument("path", type=Path)
@@ -45,6 +48,10 @@ def main():
     if args.command == "profile":
         result = profile_sources(root, args.output or root / "data/cache/profile")
         print(f'Completed {len(result["files"])} files in {result["elapsed_seconds"]} s')
+    elif args.command == "engine-demo":
+        from .modules.calculations.synthetic import run_demo
+        result = run_demo(args.output or root / "data/cache/engine-demo.json", args.seed)
+        print(f'Synthetic scenarios: {len(result["recommendations"])}; JSON, HTML and diagnostic CSV written')
     elif args.command == "preview-systeme":
         policy = json.loads(args.policy.read_text(encoding="utf-8"))
         persisted = None

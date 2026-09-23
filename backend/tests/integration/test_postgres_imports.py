@@ -199,9 +199,10 @@ class PostgresImportTests(unittest.TestCase):
                                 for role in ("sales", "inventory", "inbound")}}
         manifest["sources"]["systeme:constraints"] = {"import_id": constraint["id"], "kind": "constraints"}
         dataset = create_dataset(self.engine, manifest)
-        policy = json.loads((root / "tests/fixtures/synthetic/systeme_preview_policy.json").read_text(encoding="utf-8"))
-        excel = preview(root, policy, self.folder / "excel.json")
-        with patch("app.modules.calculations.preview.read", side_effect=AssertionError("Excel must not be opened")):
-            persisted, _ = systeme_preview_sources(self.engine, dataset["id"])
-            database = preview(root, policy, self.folder / "database.json", persisted, dataset["id"])
-        self.assertEqual(excel["recommendations"], database["recommendations"])
+        for filename in ("systeme_preview_policy.json", "systeme_robust_policy.json"):
+            policy = json.loads((root / "tests/fixtures/synthetic" / filename).read_text(encoding="utf-8"))
+            excel = preview(root, policy, self.folder / "excel.json")
+            with patch("app.modules.calculations.preview.read", side_effect=AssertionError("Excel must not be opened")):
+                persisted, _ = systeme_preview_sources(self.engine, dataset["id"])
+                database = preview(root, policy, self.folder / "database.json", persisted, dataset["id"])
+            self.assertEqual(excel["recommendations"], database["recommendations"])

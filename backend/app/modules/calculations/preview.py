@@ -10,7 +10,7 @@ from html import escape
 import json
 
 from ...engine.contracts import Inbound, ReplenishmentInput
-from ...engine.forecast import baseline_daily
+from ...engine.forecast import baseline_daily, robust_daily, backtest_monthly, error_safety_stock, ALGORITHM_VERSION
 from ...engine.replenishment import calculate
 from ..imports.adapters.systeme import read
 from ..imports.profiling import dumps
@@ -32,6 +32,16 @@ def preview(root: Path, policy: dict, output: Path, persisted_sources: dict | No
         raise ValueError("Preview stock date must equal calculation date; no silent stock roll-forward")
     if not policy["assumptions"]:
         raise ValueError("Scenario assumptions must be documented")
+    model = policy.get("forecast_model", "baseline-1")
+    if model not in {"baseline-1", ALGORITHM_VERSION}:
+        raise ValueError("Unknown forecast model")
+    safety_mode = policy.get("safety_stock_mode", "days")
+    if safety_mode not in {"days", "backtest_error"}:
+        raise ValueError("Unknown safety-stock mode")
+    if safety_mode == "backtest_error" and model != ALGORITHM_VERSION:
+        raise ValueError("Backtest safety stock requires robust-monthly-2")
+    if safety_mode == "backtest_error" and "safety_service_z" not in policy:
+        raise ValueError("An explicit safety_service_z is required")
     if persisted_sources is None:
         files = sorted((root / "Systeme electric").glob("*.xlsx"))
         moq_files = [p for p in files if p.name.startswith("MOQ")]
@@ -51,9 +61,9 @@ def preview(root: Path, policy: dict, output: Path, persisted_sources: dict | No
             constraints[row.code] = row
     from collections import Counter
     code_counts = Counter(r.code for r in rows if r.code)
-    result = {"mode": policy["mode"], "policy": policy, "algorithm_version": "baseline-1",
+    result = {"mode": policy["mode"], "policy": policy, "algorithm_version": model,
               "limitations": ["Scenario only; stock date, coverage, units and supply policy are unconfirmed",
-                  "Baseline median of six complete monthly daily rates; no seasonality, trend or stockout correction",
+                  "No confirmed transaction signs/client IDs/stockout intervals; document cleaning and stockout restoration are not applied to these real inputs",
                   "External growth/category codes retained but not interpreted",
                   "No order approval or export; this file is a diagnostic calculation"], "recommendations": []}
     if dataset_id is not None:
@@ -73,17 +83,39 @@ def preview(root: Path, policy: dict, output: Path, persisted_sources: dict | No
                 raise ValueError("Constraint row requires review")
             fields = row.fields
             history = {date.fromisoformat(k): v for k, v in fields.items() if len(k) == 10 and k[4] == "-"}
-            forecast = baseline_daily(history, as_of, policy["lead_days"] + policy["review_days"])
+            horizon = policy["lead_days"] + policy["review_days"]
+            model_steps, model_limitations = (), ()
+            if model == "baseline-1":
+                forecast = baseline_daily(history, as_of, horizon)
+            else:
+                growth = Decimal(str(policy["external_growth"])) if "external_growth" in policy else None
+                predicted = robust_daily(history, as_of, horizon, growth, policy.get("growth_mode"))
+                forecast = predicted.daily
+                model_steps, model_limitations = predicted.explanation_steps, predicted.limitations
+                metrics = backtest_monthly(history, as_of)
+                item["forecast_diagnostics"] = {"method": predicted.method, "history_months": predicted.history_months,
+                                                 "backtest": metrics}
+            if safety_mode == "backtest_error":
+                z = Decimal(str(policy["safety_service_z"]))
+                safety = error_safety_stock(metrics[ALGORITHM_VERSION], horizon, z)
+                model_steps += ({"operation": "forecast_error_safety_stock", "service_z": z,
+                    "daily_rmse": metrics[ALGORITHM_VERSION]["daily_rmse"], "horizon_days": horizon,
+                    "assumption": "daily forecast errors fully correlated within horizon", "value": safety},)
+            else:
+                safety = forecast[0] * Decimal(str(policy["safety_stock_days"]))
             qty = fields.get("сэ в пути 24.09")
             if qty is None:
                 raise ValueError("Inbound quantity is unknown")
             inputs = ReplenishmentInput(as_of, policy["lead_days"], policy["review_days"], forecast,
-                fields.get("свободный остаток"), forecast[0] * Decimal(str(policy["safety_stock_days"])),
+                fields.get("свободный остаток"), safety,
                 (Inbound(date.fromisoformat(policy["inbound_date"]), qty),),
                 Decimal(str(policy["storage_units_per_order_unit"])), Decimal(str(policy["minimum_order"])),
                 constraint.fields.get("кратность") if constraint else None)
             calculated = calculate(inputs)
             item.update(asdict(calculated))
+            if model != "baseline-1":
+                item["explanation_steps"] = model_steps + calculated.explanation_steps
+                item["limitations"] = model_limitations + calculated.limitations
             item["forecast_daily"] = forecast[0]
             if constraint:
                 item["constraint_source"] = {"file": constraint.file, "sheet": constraint.sheet,
@@ -102,29 +134,34 @@ def write_preview_html(result: dict, path: Path) -> None:
     def text(value):
         return escape("—" if value is None else str(value))
 
-    rows = []
-    for item in result["recommendations"]:
+    rows, previous_supplier = [], None
+    for item in sorted(result["recommendations"], key=lambda r: (r.get("supplier", ""), r.get("code") or "")):
+        if item.get("supplier") != previous_supplier:
+            previous_supplier = item.get("supplier")
+            rows.append(f'<tr><th colspan="8">Поставщик: {text(previous_supplier)}</th></tr>')
         status = "Рассчитано в сценарии" if item["status"] == "calculated" else "Недостаточно данных"
-        details = {k: item.get(k) for k in ("source", "constraint_source", "explanation_steps", "limitations")}
+        details = {k: item.get(k) for k in ("source", "constraint_source", "explanation_steps", "forecast_diagnostics", "demand_adjustments", "limitations")}
         rows.append("<tr>" + "".join(f"<td>{text(item.get(k))}</td>" for k in
             ("code", "article", "forecast_demand", "eligible_inbound", "raw_requirement", "order_quantity", "first_deficit_date"))
             + f"<td>{status}<details><summary>Обоснование</summary><pre>{escape(dumps(details))}</pre></details></td></tr>")
     html = """<!doctype html><html lang="ru"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Systeme Electric — диагностический расчёт</title>
+<title>Диагностический расчёт заказов</title>
 <style>body{font:15px system-ui;margin:24px;color:#17212b}h1{font-size:24px}
 .notice{background:#fff3cf;padding:16px;border-left:4px solid #9b6500}table{border-collapse:collapse;width:100%}
 th,td{padding:10px;border-bottom:1px solid #dde1e5;text-align:left;vertical-align:top}th{background:#eef2f6;position:sticky;top:0}
 td:nth-child(n+3):nth-child(-n+6){text-align:right;font-variant-numeric:tabular-nums}
 .table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:560px;font-size:12px}
-</style><h1>Systeme Electric: первый расчёт</h1>
-<p class="notice">Демонстрационный сценарий на реальных исходниках. Условия закупки и охват не подтверждены.
-Это диагностическая таблица, не утверждённый заказ. Прогноз — медиана суточных темпов за шесть полных месяцев;
-сезонность, рост, категории и stockout пока не учитываются.</p>
+</style><h1>Диагностический расчёт заказов</h1>
 """
+    notice = ("Синтетические данные: все продажи, клиенты и условия сгенерированы для проверки алгоритмов."
+              if result["mode"] == "synthetic" else
+              "Сценарий на реальных исходниках: условия закупки и охват не подтверждены. Документная очистка и stockout не применены из-за ограничений данных.")
+    html += '<p class="notice">' + notice + ' Это диагностическая таблица, не утверждённый заказ.</p>'
+    html += f'<p>Алгоритм: {text(result["algorithm_version"])}</p>'
     html += "<details><summary>Все допущения сценария</summary><pre>" + escape(
         json.dumps(result["policy"], ensure_ascii=False, indent=2)) + "</pre></details>"
-    html += f'<p>Дата расчёта: {text(result["policy"]["calculation_date"])}. Строк: {len(rows)}. Количество заказа — в единицах, заданных в сценарии.</p>'
+    html += f'<p>Дата расчёта: {text(result["policy"]["calculation_date"])}. Строк: {len(result["recommendations"])}. Количество заказа — в единицах, заданных в сценарии.</p>'
     html += '<div class="table"><table><thead><tr>' + "".join(f"<th>{h}</th>" for h in
         ("Код 1С", "Артикул", "Прогноз на горизонт", "Учтённый путь", "Потребность до округления", "Количество заказа", "Первый дефицит", "Статус"))
     html += "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div></html>"

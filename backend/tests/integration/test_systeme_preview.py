@@ -13,6 +13,18 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @unittest.skipUnless((ROOT / "Systeme electric").exists(), "Partner workbooks are not present")
 class SystemePreviewTests(unittest.TestCase):
+    def test_robust_model_exposes_diagnostics_and_explanation(self):
+        policy = json.loads((ROOT / "tests/fixtures/synthetic/systeme_robust_policy.json").read_text(encoding="utf-8"))
+        with TemporaryDirectory() as folder:
+            result = preview(ROOT, policy, Path(folder) / "robust.json")
+        self.assertEqual(result["algorithm_version"], "robust-monthly-2")
+        calculated = [r for r in result["recommendations"] if r["status"] == "calculated"]
+        self.assertTrue(calculated)
+        for item in calculated:
+            self.assertGreaterEqual(item["forecast_diagnostics"]["backtest"]["robust-monthly-2"]["origins"], 3)
+            self.assertEqual(item["explanation_steps"][-1]["value"], item["order_quantity"])
+            self.assertTrue(any(s["operation"] == "forecast_error_safety_stock" for s in item["explanation_steps"]))
+
     def test_real_sources_provenance_arithmetic_and_repeatability(self):
         policy = json.loads((ROOT / "tests/fixtures/synthetic/systeme_preview_policy.json").read_text(encoding="utf-8"))
         sources = list((ROOT / "Systeme electric").glob("*.xlsx"))
