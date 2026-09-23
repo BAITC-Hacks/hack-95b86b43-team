@@ -2,7 +2,8 @@
 
 Первый рабочий этап: чтение и полный аудит Excel обоих поставщиков, базовый прогноз,
 независимый расчёт потребности и диагностическая таблица Systeme Electric.
-API, PostgreSQL, миграции, worker и процесс утверждения пока не реализованы.
+Реализованы PostgreSQL-хранилище импорта, миграции Alembic, диагностика строк и неизменяемые наборы данных.
+API, worker и процесс утверждения пока не реализованы.
 
 ```text
 app/
@@ -42,12 +43,13 @@ python -m venv .venv
 ```
 
 В Linux после создания окружения использовать `.venv/bin/python` вместо `.venv/Scripts/python`.
-`pyproject.toml` описывает пакет; `requirements.txt` фиксирует все текущие runtime-зависимости.
-Проверено на Python 3.12.14, openpyxl 3.1.5 и et-xmlfile 2.0.0. Тесты используют стандартный unittest.
+`pyproject.toml` описывает пакет; `requirements.txt` фиксирует прямые runtime-зависимости.
+Первый расчёт проверен на Python 3.12.14; слой PostgreSQL и полный набор тестов — на Python 3.14.7
+в пользовательском `.venv`. Тесты используют стандартный unittest.
 
 Если Python отсутствует в PATH, можно передать абсолютный путь к доступному интерпретатору.
-На машине разработки использован встроенный интерпретатор Codex с уже установленными зависимостями;
-установка пакетов или изменение глобального окружения для проверки не выполнялись.
+Для первого аудита использован встроенный интерпретатор; зависимости PostgreSQL установлены
+в локальное `backend/.venv`. Глобальное окружение не менялось.
 
 ## Результаты
 
@@ -81,5 +83,50 @@ python -m venv .venv
 Архитектурные границы сохраняются: `engine/` не импортирует Excel, HTTP или базу;
 `modules/imports/` читает и проверяет источники; `modules/calculations/preview.py` связывает первый сценарий.
 
-Дальше: решить вопросы [аудита](../docs/DATA_AUDIT.md), реализовать сохраняемый импорт в PostgreSQL,
-неизменяемые наборы данных и полноценные алгоритмы пяти must-have.
+## PostgreSQL: загрузка и версии данных
+
+Подробный сценарий — [docs/POSTGRES_IMPORT.md](../docs/POSTGRES_IMPORT.md).
+На текущей машине база уже запущена, миграции применены, 12 книг импортированы.
+Секрет подключения хранится в корневом `.env`, исключённом из Git.
+
+Для новой машины: заполнить корневой `.env` по `.env.example`, затем из корня:
+
+```powershell
+docker compose up -d postgres
+```
+
+Из `backend/`:
+
+```powershell
+.venv/Scripts/python -m pip install -r requirements.txt
+.venv/Scripts/python -m app.cli db-upgrade
+.venv/Scripts/python -m app.cli import-all
+.venv/Scripts/python -m app.cli imports
+```
+
+`import-all` можно повторять: неизменённые файлы и контекст получают `reused: true`.
+Для текущей локальной базы готов явный сценарный манифест:
+
+```powershell
+.venv/Scripts/python -m app.cli dataset-create ../data/cache/systeme-dataset-manifest.json
+.venv/Scripts/python -m app.cli preview-systeme --policy ../tests/fixtures/synthetic/systeme_preview_policy.json --dataset 4e124f3e-22c3-4a6f-a798-b737cf075e25 --output ../data/cache/systeme-db-preview.json
+```
+
+UUID выше относится только к текущей локальной базе. На новой машине использовать ID,
+выданный `dataset-create`; пример манифеста и описание полей есть в документации.
+Режим `--dataset` читает сохранённые `NUMERIC` и строки из PostgreSQL, не открывая Excel.
+Результат включает ID набора; исходный файловый сценарий без `--dataset` сохранён.
+
+Тесты PostgreSQL запускаются отдельно и создают временную схему `test_import_<uuid>`:
+
+```powershell
+$env:RUN_POSTGRES_TESTS = '1'
+.venv/Scripts/python -m unittest discover -s tests/integration -v
+```
+
+Рабочие таблицы не очищаются. Тестовая схема удаляется после проверки.
+Проверены откат частичной записи, повтор/конкуренция, точность количеств,
+исключение дублей, неизменность версий, upgrade/downgrade миграций и совпадение расчёта с Excel.
+
+Дальше: полноценные алгоритмы пяти must-have, каталог товаров/единиц,
+согласование вопросов [аудита](../docs/DATA_AUDIT.md), затем API и worker.

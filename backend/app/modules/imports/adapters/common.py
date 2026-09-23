@@ -120,7 +120,7 @@ def iter_workbook(path: Path, supplier: str) -> Iterator[SourceRow]:
                 try:
                     code, fields, errors = normalize_row(values, layout)
                 except ValueError as exc:
-                    code, fields, errors = None, {}, (str(exc),)
+                    code, fields, errors = None, {str(i + 1): value for i, value in enumerate(values)}, (str(exc),)
                 yield SourceRow(path.name, digest, supplier, sheet.title, row_number,
                                 layout.kind, code, fields, errors)
     finally:

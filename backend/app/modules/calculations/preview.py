@@ -16,7 +16,8 @@ from ..imports.adapters.systeme import read
 from ..imports.profiling import dumps
 
 
-def preview(root: Path, policy: dict, output: Path) -> dict:
+def preview(root: Path, policy: dict, output: Path, persisted_sources: dict | None = None,
+            dataset_id: str | None = None) -> dict:
     if policy.get("mode") != "scenario_on_real_data":
         raise ValueError("Preview requires an explicitly labelled scenario_on_real_data policy")
     required = ("calculation_date", "assumed_stock_date", "inbound_date", "lead_days", "review_days",
@@ -31,18 +32,23 @@ def preview(root: Path, policy: dict, output: Path) -> dict:
         raise ValueError("Preview stock date must equal calculation date; no silent stock roll-forward")
     if not policy["assumptions"]:
         raise ValueError("Scenario assumptions must be documented")
-    files = sorted((root / "Systeme electric").glob("*.xlsx"))
-    moq_files = [p for p in files if p.name.startswith("MOQ")]
-    summary_files = [p for p in files if p.name.startswith("Товар в пути")]
-    if len(moq_files) != 1 or len(summary_files) != 1:
-        raise ValueError("Expected one dedicated MOQ and one Systeme summary")
+    if persisted_sources is None:
+        files = sorted((root / "Systeme electric").glob("*.xlsx"))
+        moq_files = [p for p in files if p.name.startswith("MOQ")]
+        summary_files = [p for p in files if p.name.startswith("Товар в пути")]
+        if len(moq_files) != 1 or len(summary_files) != 1:
+            raise ValueError("Expected one dedicated MOQ and one Systeme summary")
+        constraint_rows = read(moq_files[0])
+        rows = [r for r in read(summary_files[0]) if r.kind == "summary"]
+    else:
+        constraint_rows = persisted_sources["constraints"]
+        rows = persisted_sources["summary"]
     constraints, duplicate_codes = {}, set()
-    for row in read(moq_files[0]):
+    for row in constraint_rows:
         if row.kind == "constraints" and row.code:
             if row.code in constraints:
                 duplicate_codes.add(row.code)
             constraints[row.code] = row
-    rows = [r for r in read(summary_files[0]) if r.kind == "summary"]
     from collections import Counter
     code_counts = Counter(r.code for r in rows if r.code)
     result = {"mode": policy["mode"], "policy": policy, "algorithm_version": "baseline-1",
@@ -50,6 +56,8 @@ def preview(root: Path, policy: dict, output: Path) -> dict:
                   "Baseline median of six complete monthly daily rates; no seasonality, trend or stockout correction",
                   "External growth/category codes retained but not interpreted",
                   "No order approval or export; this file is a diagnostic calculation"], "recommendations": []}
+    if dataset_id is not None:
+        result["dataset_id"] = dataset_id
     for row in rows:
         item = {"code": row.code, "supplier": "systeme", "source": {
             "file": row.file, "sheet": row.sheet, "row": row.row, "sha256": row.sha256},

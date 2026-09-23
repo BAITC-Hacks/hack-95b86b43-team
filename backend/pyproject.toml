@@ -7,7 +7,7 @@ name = "elektrokomplekt"
 version = "0.1.0"
 description = "Supplier source profiling and replenishment calculation"
 requires-python = ">=3.12"
-dependencies = ["openpyxl==3.1.5", "et-xmlfile==2.0.0"]
+dependencies = ["openpyxl==3.1.5", "et-xmlfile==2.0.0", "SQLAlchemy==2.0.43", "alembic==1.16.5", "psycopg[binary]==3.2.10", "python-dotenv==1.1.1"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
